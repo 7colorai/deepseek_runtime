@@ -1,5 +1,7 @@
 # DeepSeek Runtime
 
+[English](README.md) | [简体中文](README_zh.md)
+
 DeepSeek Runtime is a fork-ready Python runtime kernel for building local agents on the official DeepSeek API.
 
 It is not a cache-only wrapper. The project focuses on DeepSeek physical traits that affect agent correctness, evidence, safety, diagnostics, and cost visibility.
