@@ -1,0 +1,17 @@
+{
+  "rows": [
+    {
+      "task_id": "sample-1",
+      "model": "deepseek-v4-flash",
+      "route_reason": "low-cost local summary",
+      "success": true,
+      "first_completion": true,
+      "tokens": {
+        "prompt_cache_hit_tokens": 128,
+        "prompt_cache_miss_tokens": 256,
+        "completion_tokens": 64,
+        "total_tokens": 448
+      }
+    }
+  ]
+}
