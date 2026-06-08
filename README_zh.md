@@ -28,7 +28,7 @@ DeepSeek Runtime 是一个可 fork 的 Python Runtime Kernel，用于基于 Deep
 
 ## 范围
 
-版本 `0.1.1a0` 是 Runtime Kernel Open Alpha。
+版本 `0.1.1a1` 是 Runtime Kernel Open Alpha。
 
 包含：
 

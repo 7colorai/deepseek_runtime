@@ -1,6 +1,6 @@
 # API Reference
 
-This document covers the public `0.1.1a0` API surface. Anything outside this list should be treated as internal.
+This document covers the public `0.1.1a1` API surface. Anything outside this list should be treated as internal.
 
 ## Settings
 
@@ -87,6 +87,35 @@ Constrains file paths to a workspace root and classifies local commands by risk.
 ### `PermissionPolicy`
 
 Applies ordered permission rules and records redacted audit events.
+
+Related public types:
+
+| Type | Meaning |
+| --- | --- |
+| `Risk` | Risk category for reads, writes, shell, network, and mutating git operations. |
+| `Decision` | Permission result: `allow`, `ask`, or `deny`. |
+| `PermissionRequest` | Runtime request evaluated by a permission policy. |
+| `PermissionRule` | Ordered rule used by `PermissionPolicy`. |
+
+### `ChangeManager`
+
+Creates diff previews, applies approved file changes, and rolls them back through a `RollbackToken`.
+
+Related public types:
+
+| Type | Meaning |
+| --- | --- |
+| `FileChange` | One text file change with a relative path, expected original sha256, and new content. |
+| `ChangeSet` | A group of file changes with a stable change-set ID. |
+| `RollbackToken` | Local rollback handle returned by `ChangeManager.apply()`. |
+| `content_sha256(content)` | Helper for computing the expected original hash. |
+
+Important boundaries:
+
+- `preview(change_set)` returns a unified diff and does not write files.
+- `apply(change_set)` validates workspace bounds, expected hashes, and write permission before writing.
+- `rollback(token)` restores the original bytes once and marks the token consumed.
+- Integrations must still add their own user approval UI before calling `apply()`.
 
 ### `SessionState`
 

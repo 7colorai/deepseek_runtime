@@ -4,11 +4,46 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from deepseek_runtime.security import Decision, PermissionDenied, PermissionPolicy, PermissionRequest, PermissionRule, Risk, SandboxViolation, WorkspaceSandbox
+from deepseek_runtime import ChangeManager, ChangeSet, Decision, FileChange, PermissionPolicy, PermissionRequest, PermissionRule, Risk, WorkspaceSandbox, content_sha256
+from deepseek_runtime import __version__
+from deepseek_runtime.security import PermissionDenied, SandboxViolation
 from deepseek_runtime.session import SessionState, SessionStore, ToolCallRecord, resume_tool_calls
 
 
 class SecuritySessionTests(unittest.TestCase):
+    def test_changeset_public_api_previews_applies_and_rolls_back(self) -> None:
+        self.assertEqual(__version__, "0.1.1a1")
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            target = workspace / "notes.txt"
+            target.write_text("old\n", encoding="utf-8")
+            sandbox = WorkspaceSandbox(workspace, PermissionPolicy([PermissionRule(Risk.WRITE, Decision.ALLOW)]))
+            manager = ChangeManager(sandbox)
+            change_set = ChangeSet((FileChange("notes.txt", content_sha256(b"old\n"), "new\n"),))
+
+            preview = manager.preview(change_set)
+            self.assertIn("--- a/notes.txt", preview)
+            self.assertIn("+++ b/notes.txt", preview)
+            self.assertIn("-old", preview)
+            self.assertIn("+new", preview)
+
+            token = manager.apply(change_set)
+            self.assertEqual(target.read_text(encoding="utf-8"), "new\n")
+            manager.rollback(token)
+            self.assertEqual(target.read_text(encoding="utf-8"), "old\n")
+            self.assertTrue(token.consumed)
+
+    def test_changeset_apply_requires_write_permission(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            target = workspace / "notes.txt"
+            target.write_text("old\n", encoding="utf-8")
+            manager = ChangeManager(WorkspaceSandbox(workspace))
+            change_set = ChangeSet((FileChange("notes.txt", content_sha256(b"old\n"), "new\n"),))
+
+            with self.assertRaises(PermissionDenied):
+                manager.apply(change_set)
+
     def test_sandbox_blocks_path_escape_and_network_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             sandbox = WorkspaceSandbox(Path(directory))

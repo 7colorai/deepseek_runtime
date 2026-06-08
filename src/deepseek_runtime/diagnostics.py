@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 SCHEMA_VERSION = "1.0"
-RUNTIME_VERSION = "0.1.1a0"
+RUNTIME_VERSION = "0.1.1a1"
 
 
 def _check(name: str, status: str, message: str, **fields: Any) -> dict[str, Any]:

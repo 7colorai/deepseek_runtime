@@ -84,4 +84,4 @@ python3 scripts/release_gate_audit.py \
   --manifest dist/release-manifest.json
 ```
 
-The hosted service path is intentionally out of `0.1.1a0`; see [Hosting Roadmap](hosting-roadmap.md).
+The hosted service path is intentionally out of `0.1.1a1`; see [Hosting Roadmap](hosting-roadmap.md).

@@ -1,6 +1,6 @@
 # Known Unknowns
 
-These items are intentionally explicit for `0.1.1a0`.
+These items are intentionally explicit for `0.1.1a1`.
 
 | Area | Status | Next check |
 | --- | --- | --- |

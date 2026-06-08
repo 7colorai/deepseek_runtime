@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.1.1a0"
+VERSION = "0.1.1a1"
 ARCHIVE_BASENAME = f"deepseek-runtime-{VERSION}-source"
 
 EXCLUDE_GLOBS = (

@@ -1,6 +1,6 @@
 # Hosting Roadmap
 
-Hosted service support is out of scope for `0.1.1a0`.
+Hosted service support is out of scope for `0.1.1a1`.
 
 The current release is a local Python runtime kernel. It can be used by a hosted service later, but it does not ship:
 

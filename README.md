@@ -28,7 +28,7 @@ Research lineage:
 
 ## Scope
 
-Version `0.1.1a0` is a Runtime Kernel Open Alpha.
+Version `0.1.1a1` is a Runtime Kernel Open Alpha.
 
 Included:
 
