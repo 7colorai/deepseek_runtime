@@ -9,6 +9,16 @@ __pycache__/
 venv/
 *.egg-info/
 
+# AI Agent tool configurations (machine-local, not project-shared)
+.agent/
+.claude/
+.codex/
+.opencode/
+.trae/
+
+# Scratch debug files
+_debug*.py
+
 # Runtime secrets and generated output
 .env
 .deepseek-runtime/
