@@ -1,134 +1,210 @@
 # DeepSeek Runtime
 
+> Building a local Agent on the DeepSeek API? Security, multi-step reasoning, cost control, resumability — this repo has you covered.
+>
+> A fork-ready Python runtime kernel. Clone and go.
+
 [English](README_en.md) | [简体中文](README.md)
 
-DeepSeek Runtime is a fork-ready Python runtime kernel for building local agents on the official DeepSeek API.
+***
 
-It is not a cache-only wrapper. The project focuses on DeepSeek physical traits that affect agent correctness, evidence, safety, diagnostics, and cost visibility.
+## Are You Building an Agent on the DeepSeek API?
 
-Research lineage:
+If you've tried, you've probably seen something like this:
 
-- Runtime repository target: [7colorai/deepseek_runtime](https://github.com/7colorai/deepseek_runtime)
-- Parent product line: [yuanchenglu/deepseekagent](https://github.com/yuanchenglu/deepseekagent)
-- Harness research archive: [yuanchenglu/llm-harness-agent](https://github.com/yuanchenglu/llm-harness-agent)
-- Official DeepSeek API docs: [api-docs.deepseek.com](https://api-docs.deepseek.com/)
+```
+You: Read src/main.py from the project directory
+Agent: OK, let me call read_file… wait, I can't find the path…
+You: ?? Aren't you on my machine?
+```
 
-## Value Matrix
+**The core problem**: There's a huge gap between calling an API and building a reliable local Agent.
 
-| Layer | DeepSeek physical trait or local-agent problem | What this runtime ships | Why it is beyond cache hit rate |
-| --- | --- | --- | --- |
-| Native chat contract | DeepSeek exposes OpenAI-compatible `/chat/completions` with V4 model IDs, thinking mode, tool calls, stream chunks, and usage fields. | `DeepSeekClient.chat()`, `chat_stream()`, `models()`, and `RuntimeSettings.from_env()`. | The runtime preserves DeepSeek-specific request fields instead of hiding them behind a generic provider shim. |
-| Thinking mode control | DeepSeek V4 has explicit `thinking` and `reasoning_effort` controls. | `DeepSeekRuntime.run()` enables thinking by default and live smoke verifies the official endpoint accepts the native shape. | Cache-only runtimes do not model reasoning-mode controls as first-class runtime behavior. |
-| Reasoning-content hygiene | Thinking responses may include `reasoning_content`; this must not be written into release evidence or logs. | Evidence records presence, fields, byte counts, and hashes, never raw `reasoning_content`. | This protects chain-of-thought-like data while still proving the model response shape. |
-| Wire evidence | Protocol experiments and cache behavior depend on exact request bytes. | Stable JSON wire encoding and request sha256 fingerprints. | It lets maintainers compare runtime behavior without storing prompt text. |
-| Function tool loop | DeepSeek tool-call responses carry function names and JSON argument strings. | Bounded tool loop, JSON argument parsing, tool result messages, max-step stop. | Agent correctness depends on loop semantics, not only provider connectivity. |
-| Prefix-cache observability | DeepSeek usage can expose cache hit/miss token fields. | Diagnostics and observability summarize hit tokens, miss tokens, total tokens, success rate, and estimated cost. | Cache visibility is connected to task success and cost, not treated as a single isolated metric. |
-| Local safety | Local agents need workspace boundaries, permission decisions, previews, rollback, and resumable side effects. | `WorkspaceSandbox`, `PermissionPolicy`, change-set rollback primitives, `SessionState`, and deterministic safety drill. | This is runtime infrastructure for local agents, not an API cache. |
-| Release evidence | Fork users need to prove installability, diagnostics, artifact checksums, and live API compatibility. | `doctor`, `release_drill.py`, `build_release_artifact.py`, `release_gate_audit.py`, and `live_api_smoke.py`. | A release is accepted only with executable evidence and redaction checks. |
+Calling the API is one line:
 
-## Scope
+```python
+requests.post("https://api.deepseek.com/chat/completions", json={...})
+```
 
-Version `0.1.1a1` is a Runtime Kernel Open Alpha.
+But making that Agent **safely** read files, run commands, remember state, and not mess up — that requires solving:
 
-Included:
+- 🔒 **Safety** — Agent might try to execute dangerous commands (`rm -rf /` — what then?)
+- 🧠 **Multi-step reasoning** — Agent needs a think→act→observe loop, not a single Q&A
+- 📝 **Evidence** — How do you prove the Agent called the API without leaking your API key?
+- 💰 **Cost control** — How many tokens were used? What's the cache hit rate?
+- 🔄 **Resumability** — If interrupted, can it pick up where it left off instead of starting over?
 
-- Python package distribution: `deepseek-runtime`
-- Import namespace: `deepseek_runtime`
-- CLI: `deepseek-runtime doctor --json` and `deepseek-runtime run`
-- Real DeepSeek official API smoke through `DEEPSEEK_API_KEY`
-- Local safety, session, diagnostics, evidence, and observability primitives
+The API doesn't solve these problems. That's why you need a Runtime.
 
-Not included:
+---
 
-- Hosted API service
-- Desktop GUI
-- Mobile app
-- Enterprise policy center
-- Plugin marketplace
+## What Is DeepSeek Runtime?
 
-## Install
+Imagine you have a brilliant assistant (DeepSeek V4). But it lives in the API server, not on your machine. You want it to read files, search code, modify projects — but it can't touch your computer directly.
+
+**DeepSeek Runtime gives this assistant hands and feet**:
+
+- **Hands** — call tools (read files, run commands)
+- **Feet** — limit the action range (project directory only)
+- **Brain** — remember where it left off (session state)
+- **Mouth** — talk to the API safely (evidence recording, no privacy leaks)
+- **Safety officer** — stop dangerous operations anytime (permission policy, rollback)
+
+---
+
+## Quick Start
 
 ```bash
+# Clone
 git clone https://github.com/7colorai/deepseek_runtime.git
 cd deepseek_runtime
+
+# Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
+
+# Install
 python3 -m pip install -e .
+
+# Health check (no API key needed)
 deepseek-runtime doctor --json
 ```
 
-`doctor --json` does not call the live DeepSeek API. It reports local health, redacted config, entrypoint availability, workspace writability, session-store writability, and optional evidence summaries.
-
-## Run
+Got an API key? Run it:
 
 ```bash
-export DEEPSEEK_API_KEY=...
-deepseek-runtime run --workspace . "Summarize this repository structure."
+export DEEPSEEK_API_KEY=sk-your-key-here
+
+# Let the Agent read files and analyze your project
+deepseek-runtime run --workspace . "Describe this repository's structure"
 ```
 
-By default, CLI JSON output is safe for logs: it emits fingerprints, byte counts, message structure, usage, and diagnostics, but not prompt or response text. Use `--include-content` only for local interactive debugging.
+---
 
-## Python API
+## When Do You Need It
 
-```python
-from deepseek_runtime import DeepSeekClient, DeepSeekRuntime, RuntimeSettings, WorkspaceTools
+| Scenario | Why Runtime |
+|----------|------------|
+| You're building on top of the DeepSeek API | Runtime handles safety, sessions, and evidence — you focus on business logic |
+| You want a fork-ready Agent kernel | Pure Python, readable, easy to trim down |
+| You care about Agent cost and security | Built-in token stats, cache analysis, sandbox isolation, permission policies |
+| You want to learn Agent system architecture | Six layers, each file < 500 lines — easy to read and modify |
 
-settings = RuntimeSettings.from_env()
-client = DeepSeekClient(settings)
-runtime = DeepSeekRuntime(client)
-tools = WorkspaceTools(".").catalog()
+---
 
-result = runtime.run(
-    [{"role": "user", "content": "List the files in this workspace."}],
-    workspace=".",
-    tools=tools,
-)
+## Six-Layer Architecture
 
-print(result.ok)
-print(result.final_text)
-print(result.to_safe_dict())
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CLI Layer (cli.py)                             │
+│             deepseek-runtime doctor / run                         │
+├─────────────────────────────────────────────────────────────────┤
+│               Runtime Layer (runtime.py)                          │
+│           ReAct Loop: Think→Act→Observe (up to 8 steps)          │
+├─────────────────────────────────────────────────────────────────┤
+│    Session Layer (session.py)  │  Safety Layer (security.py)     │
+│  SessionState / Store          │  Sandbox / Policy / ChangeMgr   │
+│  "Short-term memory"           │  "Fence + permissions + rollback"│
+├────────────────────────────────┴────────────────────────────────┤
+│              Client Layer (client.py)                             │
+│     DeepSeekClient: HTTP request + fingerprint + streaming       │
+├─────────────────────────────────────────────────────────────────┤
+│  Evidence Layer (evidence.py)  │  Observability (observability)  │
+│  Hash / Redact / Fingerprint   │  Token / Cache / Cost summary   │
+├────────────────────────────────┴────────────────────────────────┤
+│           Diagnostics Layer (diagnostics.py)                      │
+│     Local health: Python version / API Key / Storage writable    │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Live API Smoke
+Each layer is a single file under 500 lines — easy to fork and adapt.
 
-```bash
-export DEEPSEEK_API_KEY=...
-python3 scripts/live_api_smoke.py --out live-smoke.json
+---
+
+## Design Philosophy
+
+### Core Principle: Separate Model Capability from System Capability
+
+| Model (DeepSeek API) | Runtime (this repo) |
+|---------------------|-------------------|
+| Understand problem, generate response | Tool orchestration and execution |
+| Reasoning and planning | Safety boundaries and permission control |
+| Code/text generation | Session state persistence |
+| Tool-call format output | Evidence with privacy redaction |
+| Thinking mode | Token usage and cost estimation |
+
+### One Question Per Layer
+
+**Layer 0: Evidence** → How to prove the Agent really called the API without leaking privacy?
+**Layer 1: Client** → How to talk to the API gracefully (fingerprints, streaming, error handling)?
+**Layer 2: Session** → How does the Agent remember what it was doing?
+**Layer 3: Safety** → What if the Agent tries `rm -rf /`? (Three-layer protection)
+**Layer 4: Runtime** → How does the think→act→observe loop work?
+**Layer 5: Observability** → How much did it cost, and was it worth it?
+
+---
+
+## Research Lineage
+
+```
+llm-harness-agent (theoretical research / 18 deep-dive articles)
+    ↓ validate
+deepseekagent (end-user product / "one-person company" OS)
+    ↓ extract
+deepseek_runtime (reusable runtime kernel) ← You are here
 ```
 
-The smoke writes only redacted structural evidence:
+- Theory → [yuanchenglu/llm-harness-agent](https://github.com/yuanchenglu/llm-harness-agent)
+- Product → [yuanchenglu/deepseekagent](https://github.com/yuanchenglu/deepseekagent)
+- API Docs → [api-docs.deepseek.com](https://api-docs.deepseek.com/)
 
-- request fingerprint
-- request/response field summaries
-- token usage
-- response content hash and byte count
-- reasoning-content presence/hash/byte count
-- leak checks for API key, prompt text, response text, and reasoning text
+---
+
+## Documentation
+
+| Document | Content | Audience |
+|----------|---------|----------|
+| [API Reference](docs/api.md) | Every public class and method | Developer |
+| [Integration Guide](docs/integration-guide.md) | How to integrate Runtime into your app | Developer |
+| [Physical Traits](docs/physical-traits.md) | DeepSeek V4 feature support matrix | Architect |
+| [Known Unknowns](docs/known-unknowns.md) | Known limitations and future verification | Everyone |
+| [Hosting Roadmap](docs/hosting-roadmap.md) | Future multi-tenant hosting plans | CEO/Architect |
+| [Security](SECURITY.md) | API key handling, evidence, security reports | Everyone |
+| [Troubleshooting](TROUBLESHOOTING.md) | Common issues and solutions | User |
+
+---
 
 ## Release Verification
 
 ```bash
+# Unit tests
 python3 -m unittest discover -s tests -v
+
+# Local health check
 deepseek-runtime doctor --json
+
+# Full release drill
 python3 scripts/release_drill.py
 python3 scripts/build_release_artifact.py --out dist --manifest dist/release-manifest.json
+
+# Live API smoke test
 DEEPSEEK_API_KEY=... python3 scripts/live_api_smoke.py --out live-smoke.json
+
+# Release gate audit
 python3 scripts/release_gate_audit.py \
   --release-drill-result release-drill.json \
   --live-smoke-result live-smoke.json \
   --manifest dist/release-manifest.json
 ```
 
-## Documentation
-
-- [API Reference](docs/api.md)
-- [Integration Guide](docs/integration-guide.md)
-- [Physical Traits](docs/physical-traits.md)
-- [Known Unknowns](docs/known-unknowns.md)
-- [Hosting Roadmap](docs/hosting-roadmap.md)
-- [Security](SECURITY.md)
-- [Troubleshooting](TROUBLESHOOTING.md)
+---
 
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+---
+
+> ⭐ If this repo saved you time, give it a star so others can find it.
+>
+> *Questions? Open an Issue. Want to contribute? PRs welcome.*
